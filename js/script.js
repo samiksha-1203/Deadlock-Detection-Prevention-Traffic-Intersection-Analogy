@@ -187,7 +187,6 @@ function moveCar(carObj, position) {
         
         log(`${carObj.id} ALLOCATED: ${carObj.allocated}, REQUESTING: ${carObj.requesting}`, 'warning');
         
-        // Check for deadlock immediately when car enters lane
         updateDeadlockConditions();
     }
 }
@@ -202,7 +201,6 @@ function updateDeadlockConditions() {
     const hasCircular = checkCircularWait();
     document.getElementById('cond4').classList.toggle('active', hasCircular);
     
-    // Auto-detect deadlock and update RAG visualization
     if (hasCircular && !isDeadlockDetected) {
         isDeadlockDetected = true;
         
@@ -217,10 +215,8 @@ function updateDeadlockConditions() {
         updateStats();
         drawRAG(true);
     } else if (hasCircular) {
-        // Keep showing deadlock in RAG
         drawRAG(true);
     } else {
-        // No cycle - show safe state
         drawRAG(false);
     }
 }
@@ -479,7 +475,6 @@ async function runBankersAlgorithm() {
                 log(`${pid} completed execution and released resources`, 'success');
                 updateStats();
                 
-                // Check if deadlock still exists after removing this car
                 const stillDeadlocked = checkCircularWait();
                 if (!stillDeadlocked) {
                     isDeadlockDetected = false;
@@ -549,45 +544,66 @@ function drawRAG(showDeadlock = false) {
     const h = canvas.height;
     const isDark = document.body.classList.contains('dark');
     
-    ctx.fillStyle = isDark ? '#e0e0e0' : '#1a1a1a';
-    ctx.font = 'bold 16px Arial';
-    ctx.fillText('Resource Allocation Graph (RAG)', 10, 25);
+    // Responsive sizing based on screen width
+    const isMobile = w < 500;
+    const isTablet = w >= 500 && w < 768;
     
-    ctx.font = '12px Arial';
+    const titleSize = isMobile ? 11 : (isTablet ? 13 : 16);
+    const legendSize = isMobile ? 8 : (isTablet ? 9 : 12);
+    const resourceSize = isMobile ? 35 : (isTablet ? 50 : 60);
+    const processRadius = isMobile ? 16 : (isTablet ? 20 : 25);
+    const spacing = isMobile ? Math.min(w, h) * 0.22 : (isTablet ? 120 : 150);
+    const circleRadius = isMobile ? Math.min(w, h) * 0.28 : (isTablet ? 140 : 180);
+    
+    // Title
+    ctx.fillStyle = isDark ? '#e0e0e0' : '#1a1a1a';
+    ctx.font = `bold ${titleSize}px Arial`;
+    ctx.textAlign = 'left';
+    ctx.fillText('Resource Allocation Graph', 10, titleSize + 5);
+    
+    // Legend
+    ctx.font = `${legendSize}px Arial`;
     ctx.fillStyle = isDark ? '#9ca3af' : '#6b7280';
-    ctx.fillText('Circle = Process | Square = Resource | Solid → = Allocated | Dashed → = Requesting', 10, 45);
+    if (isMobile) {
+        ctx.fillText('○ Process | □ Resource', 10, titleSize + legendSize + 10);
+        ctx.fillText('─ Allocated | ··· Requesting', 10, titleSize + legendSize * 2 + 14);
+    } else {
+        ctx.fillText('Circle = Process | Square = Resource | Solid → = Allocated | Dashed → = Requesting', 10, titleSize + legendSize + 10);
+    }
 
     const waitingCars = cars.filter(c => c.state === 'waiting');
     
     if (waitingCars.length === 0) {
         ctx.fillStyle = isDark ? '#9ca3af' : '#6b7280';
-        ctx.font = '14px Arial';
+        ctx.font = `${isMobile ? 10 : 14}px Arial`;
         ctx.textAlign = 'center';
         ctx.fillText('No processes waiting - Add cars to see RAG', w/2, h/2);
         return;
     }
 
+    // Resource positions
     const resourcePos = {
-        R_North: { x: w/2 - 150, y: h/2 - 120, color: '#3b82f6' },
-        R_East: { x: w/2 + 150, y: h/2 - 120, color: '#10b981' },
-        R_South: { x: w/2 + 150, y: h/2 + 120, color: '#ef4444' },
-        R_West: { x: w/2 - 150, y: h/2 + 120, color: '#f59e0b' }
+        R_North: { x: w/2 - spacing, y: h/2 - spacing, color: '#3b82f6' },
+        R_East: { x: w/2 + spacing, y: h/2 - spacing, color: '#10b981' },
+        R_South: { x: w/2 + spacing, y: h/2 + spacing, color: '#ef4444' },
+        R_West: { x: w/2 - spacing, y: h/2 + spacing, color: '#f59e0b' }
     };
 
+    // Process positions (circular layout)
     const processPos = {};
     const angleStep = (Math.PI * 2) / waitingCars.length;
-    const radius = 180;
 
     waitingCars.forEach((car, i) => {
         const angle = i * angleStep - Math.PI / 2;
         processPos[car.id] = {
-            x: w/2 + Math.cos(angle) * radius,
-            y: h/2 + Math.sin(angle) * radius,
+            x: w/2 + Math.cos(angle) * circleRadius,
+            y: h/2 + Math.sin(angle) * circleRadius,
             car: car
         };
     });
 
-    ctx.lineWidth = 2;
+    // Draw edges - Allocated (solid)
+    ctx.lineWidth = isMobile ? 1.5 : 2;
     waitingCars.forEach(car => {
         if (car.allocated && resourcePos[car.allocated] && processPos[car.id]) {
             const rPos = resourcePos[car.allocated];
@@ -599,42 +615,46 @@ function drawRAG(showDeadlock = false) {
             ctx.moveTo(rPos.x, rPos.y);
             ctx.lineTo(pPos.x, pPos.y);
             ctx.stroke();
-            drawArrow(ctx, rPos.x, rPos.y, pPos.x, pPos.y, showDeadlock ? '#ff0000' : '#10b981');
+            drawArrow(ctx, rPos.x, rPos.y, pPos.x, pPos.y, showDeadlock ? '#ff0000' : '#10b981', isMobile);
         }
     });
 
+    // Draw edges - Requesting (dashed)
     waitingCars.forEach(car => {
         if (car.requesting && resourcePos[car.requesting] && processPos[car.id]) {
             const pPos = processPos[car.id];
             const rPos = resourcePos[car.requesting];
             
             ctx.strokeStyle = showDeadlock ? '#ff0000' : '#ef4444';
-            ctx.setLineDash([8, 4]);
+            ctx.setLineDash(isMobile ? [5, 3] : [8, 4]);
             ctx.beginPath();
             ctx.moveTo(pPos.x, pPos.y);
             ctx.lineTo(rPos.x, rPos.y);
             ctx.stroke();
-            drawArrow(ctx, pPos.x, pPos.y, rPos.x, rPos.y, showDeadlock ? '#ff0000' : '#ef4444');
+            drawArrow(ctx, pPos.x, pPos.y, rPos.x, rPos.y, showDeadlock ? '#ff0000' : '#ef4444', isMobile);
         }
     });
     ctx.setLineDash([]);
 
+    // Draw resources (squares)
     Object.entries(resourcePos).forEach(([name, pos]) => {
         const isAllocated = waitingCars.some(c => c.allocated === name);
         
+        const halfSize = resourceSize / 2;
         ctx.fillStyle = isAllocated ? pos.color : '#d1d5db';
-        ctx.fillRect(pos.x - 30, pos.y - 20, 60, 40);
+        ctx.fillRect(pos.x - halfSize, pos.y - halfSize * 0.66, resourceSize, halfSize * 1.33);
         
-        ctx.strokeStyle = showDeadlock ? '#ff0000' : '#1a1a1a';
-        ctx.lineWidth = showDeadlock ? 3 : 2;
-        ctx.strokeRect(pos.x - 30, pos.y - 20, 60, 40);
+        ctx.strokeStyle = showDeadlock ? '#ff0000' : (isDark ? '#4a4a5e' : '#1a1a1a');
+        ctx.lineWidth = showDeadlock ? (isMobile ? 2 : 3) : (isMobile ? 1.5 : 2);
+        ctx.strokeRect(pos.x - halfSize, pos.y - halfSize * 0.66, resourceSize, halfSize * 1.33);
         
         ctx.fillStyle = isAllocated ? 'white' : '#4b5563';
-        ctx.font = 'bold 11px Arial';
+        ctx.font = `bold ${isMobile ? 8 : (isTablet ? 9 : 11)}px Arial`;
         ctx.textAlign = 'center';
-        ctx.fillText(name.split('_')[1], pos.x, pos.y + 4);
+        ctx.fillText(name.split('_')[1], pos.x, pos.y + 3);
     });
 
+    // Draw processes (circles)
     Object.entries(processPos).forEach(([pid, pPos]) => {
         const dirColors = {
             north: '#3b82f6',
@@ -645,37 +665,39 @@ function drawRAG(showDeadlock = false) {
         
         ctx.fillStyle = dirColors[pPos.car.direction];
         ctx.beginPath();
-        ctx.arc(pPos.x, pPos.y, 25, 0, Math.PI * 2);
+        ctx.arc(pPos.x, pPos.y, processRadius, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.strokeStyle = showDeadlock ? '#ff0000' : '#1a1a1a';
-        ctx.lineWidth = showDeadlock ? 3 : 2;
+        ctx.strokeStyle = showDeadlock ? '#ff0000' : (isDark ? '#4a4a5e' : '#1a1a1a');
+        ctx.lineWidth = showDeadlock ? (isMobile ? 2 : 3) : (isMobile ? 1.5 : 2);
         ctx.stroke();
         
         ctx.fillStyle = 'white';
-        ctx.font = 'bold 14px Arial';
+        ctx.font = `bold ${isMobile ? 10 : (isTablet ? 12 : 14)}px Arial`;
         ctx.textAlign = 'center';
-        ctx.fillText(pid, pPos.x, pPos.y + 5);
+        ctx.fillText(pid, pPos.x, pPos.y + (isMobile ? 3 : 5));
     });
 
+    // Bottom status message
+    const bottomMargin = isMobile ? 12 : 20;
     if (showDeadlock) {
         ctx.fillStyle = '#ff0000';
-        ctx.font = 'bold 16px Arial';
+        ctx.font = `bold ${isMobile ? 10 : (isTablet ? 12 : 16)}px Arial`;
         ctx.textAlign = 'center';
-        ctx.fillText('⚠️ DEADLOCK: Circular wait detected in RAG!', w/2, h - 20);
+        ctx.fillText(isMobile ? '⚠️ DEADLOCK!' : '⚠️ DEADLOCK: Circular wait detected!', w/2, h - bottomMargin);
     } else if (waitingCars.length >= 2) {
         ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 14px Arial';
+        ctx.font = `bold ${isMobile ? 9 : (isTablet ? 11 : 14)}px Arial`;
         ctx.textAlign = 'center';
-        ctx.fillText('✓ No cycle detected - System is safe', w/2, h - 20);
+        ctx.fillText('✓ No cycle - System is safe', w/2, h - bottomMargin);
     }
 }
 
-function drawArrow(ctx, x1, y1, x2, y2, color) {
+function drawArrow(ctx, x1, y1, x2, y2, color, isMobile) {
     const angle = Math.atan2(y2 - y1, x2 - x1);
-    const headLength = 12;
+    const headLength = isMobile ? 8 : 12;
     
-    const shorten = 35;
+    const shorten = isMobile ? 25 : 35;
     const length = Math.sqrt((x2-x1)**2 + (y2-y1)**2);
     const ratio = (length - shorten) / length;
     
