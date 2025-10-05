@@ -213,12 +213,10 @@ function updateDeadlockConditions() {
         
         deadlockCount++;
         updateStats();
-        drawRAG(true);
-    } else if (hasCircular) {
-        drawRAG(true);
-    } else {
-        drawRAG(false);
     }
+    
+    // Always draw RAG with current deadlock state
+    drawRAG();
 }
 
 function checkCircularWait() {
@@ -282,6 +280,7 @@ function detectDeadlock() {
     
     if (waitingCars.length === 0) {
         log('No processes waiting - No deadlock', 'success');
+        drawRAG();
         return false;
     }
 
@@ -313,11 +312,11 @@ function detectDeadlock() {
             car.element.classList.add('deadlocked');
         });
 
-        drawRAG(true);
+        drawRAG();
         return true;
     } else {
         log('No deadlock detected - No cycle in RAG', 'success');
-        drawRAG(false);
+        drawRAG();
         return false;
     }
 }
@@ -479,7 +478,7 @@ async function runBankersAlgorithm() {
                 if (!stillDeadlocked) {
                     isDeadlockDetected = false;
                 }
-                drawRAG(stillDeadlocked);
+                drawRAG();
             }
         }
         
@@ -537,7 +536,12 @@ function displayBankerMatrices(processes, allocation, need, available, total) {
     document.getElementById('bankerDisplay').innerHTML = html;
 }
 
-function drawRAG(showDeadlock = false) {
+function drawRAG(showDeadlock = null) {
+    // If showDeadlock is not explicitly passed, check current state
+    if (showDeadlock === null) {
+        showDeadlock = isDeadlockDetected;
+    }
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     const w = canvas.width;
