@@ -215,7 +215,6 @@ function updateDeadlockConditions() {
         updateStats();
     }
     
-    // Always draw RAG with current deadlock state
     drawRAG();
 }
 
@@ -537,7 +536,6 @@ function displayBankerMatrices(processes, allocation, need, available, total) {
 }
 
 function drawRAG(showDeadlock = null) {
-    // If showDeadlock is not explicitly passed, check current state
     if (showDeadlock === null) {
         showDeadlock = isDeadlockDetected;
     }
@@ -548,7 +546,6 @@ function drawRAG(showDeadlock = null) {
     const h = canvas.height;
     const isDark = document.body.classList.contains('dark');
     
-    // Responsive sizing based on screen width
     const isMobile = w < 500;
     const isTablet = w >= 500 && w < 768;
     
@@ -559,18 +556,16 @@ function drawRAG(showDeadlock = null) {
     const spacing = isMobile ? Math.min(w, h) * 0.22 : (isTablet ? 120 : 150);
     const circleRadius = isMobile ? Math.min(w, h) * 0.28 : (isTablet ? 140 : 180);
     
-    // Title
     ctx.fillStyle = isDark ? '#e0e0e0' : '#1a1a1a';
     ctx.font = `bold ${titleSize}px Arial`;
     ctx.textAlign = 'left';
     ctx.fillText('Resource Allocation Graph', 10, titleSize + 5);
     
-    // Legend
     ctx.font = `${legendSize}px Arial`;
     ctx.fillStyle = isDark ? '#9ca3af' : '#6b7280';
     if (isMobile) {
         ctx.fillText('○ Process | □ Resource', 10, titleSize + legendSize + 10);
-        ctx.fillText('─ Allocated | ··· Requesting', 10, titleSize + legendSize * 2 + 14);
+        ctx.fillText('── Allocated | ··· Requesting', 10, titleSize + legendSize * 2 + 14);
     } else {
         ctx.fillText('Circle = Process | Square = Resource | Solid → = Allocated | Dashed → = Requesting', 10, titleSize + legendSize + 10);
     }
@@ -585,7 +580,6 @@ function drawRAG(showDeadlock = null) {
         return;
     }
 
-    // Resource positions
     const resourcePos = {
         R_North: { x: w/2 - spacing, y: h/2 - spacing, color: '#3b82f6' },
         R_East: { x: w/2 + spacing, y: h/2 - spacing, color: '#10b981' },
@@ -593,7 +587,6 @@ function drawRAG(showDeadlock = null) {
         R_West: { x: w/2 - spacing, y: h/2 + spacing, color: '#f59e0b' }
     };
 
-    // Process positions (circular layout)
     const processPos = {};
     const angleStep = (Math.PI * 2) / waitingCars.length;
 
@@ -606,36 +599,36 @@ function drawRAG(showDeadlock = null) {
         };
     });
 
-    // Draw edges - Allocated (solid)
+    // Draw edges - Allocated (solid) - ALWAYS GREEN
     ctx.lineWidth = isMobile ? 1.5 : 2;
     waitingCars.forEach(car => {
         if (car.allocated && resourcePos[car.allocated] && processPos[car.id]) {
             const rPos = resourcePos[car.allocated];
             const pPos = processPos[car.id];
             
-            ctx.strokeStyle = showDeadlock ? '#ff0000' : '#10b981';
+            ctx.strokeStyle = '#10b981';
             ctx.setLineDash([]);
             ctx.beginPath();
             ctx.moveTo(rPos.x, rPos.y);
             ctx.lineTo(pPos.x, pPos.y);
             ctx.stroke();
-            drawArrow(ctx, rPos.x, rPos.y, pPos.x, pPos.y, showDeadlock ? '#ff0000' : '#10b981', isMobile);
+            drawArrow(ctx, rPos.x, rPos.y, pPos.x, pPos.y, '#10b981', isMobile);
         }
     });
 
-    // Draw edges - Requesting (dashed)
+    // Draw edges - Requesting (dashed) - ALWAYS RED
     waitingCars.forEach(car => {
         if (car.requesting && resourcePos[car.requesting] && processPos[car.id]) {
             const pPos = processPos[car.id];
             const rPos = resourcePos[car.requesting];
             
-            ctx.strokeStyle = showDeadlock ? '#ff0000' : '#ef4444';
+            ctx.strokeStyle = '#ef4444';
             ctx.setLineDash(isMobile ? [5, 3] : [8, 4]);
             ctx.beginPath();
             ctx.moveTo(pPos.x, pPos.y);
             ctx.lineTo(rPos.x, rPos.y);
             ctx.stroke();
-            drawArrow(ctx, pPos.x, pPos.y, rPos.x, rPos.y, showDeadlock ? '#ff0000' : '#ef4444', isMobile);
+            drawArrow(ctx, pPos.x, pPos.y, rPos.x, rPos.y, '#ef4444', isMobile);
         }
     });
     ctx.setLineDash([]);
@@ -682,7 +675,6 @@ function drawRAG(showDeadlock = null) {
         ctx.fillText(pid, pPos.x, pPos.y + (isMobile ? 3 : 5));
     });
 
-    // Bottom status message
     const bottomMargin = isMobile ? 12 : 20;
     if (showDeadlock) {
         ctx.fillStyle = '#ff0000';
