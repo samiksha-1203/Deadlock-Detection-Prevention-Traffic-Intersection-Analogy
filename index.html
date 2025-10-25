@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deadlock Detection & Prevention - OS Project</title>
+    <link rel="icon" type="image/x-icon" href="assets/favicon/favicon.ico">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -13,7 +14,7 @@
             <p class="subtitle">Operating Systems - Resource Allocation Graphs & Banker's Algorithm</p>
             
             <div class="mode-selector">
-                <h3 style="color: white; margin-bottom: 15px;">🎮 Simulation Mode</h3>
+                <h3 class="mode-header">🎮 Simulation Mode</h3>
                 <div class="mode-buttons">
                     <button class="mode-btn active" data-mode="detection">
                         <span class="mode-icon">🔴</span>
@@ -124,15 +125,55 @@
             </div>
         </div>
 
-        <!-- ROW 3: Resource Status + Event Log + Banker's -->
+        <!-- ROW 3: Prevention Techniques + Event Log + Banker's -->
         <div class="row-3-grid">
             <div class="panel">
-                <h3>📊 Resource Status</h3>
-                <div id="resourceStatus" class="resource-status-panel">
-                    <div class="resource-item"><strong>R_North:</strong> FREE</div>
-                    <div class="resource-item"><strong>R_South:</strong> FREE</div>
-                    <div class="resource-item"><strong>R_East:</strong> FREE</div>
-                    <div class="resource-item"><strong>R_West:</strong> FREE</div>
+                <h3>🛡️ Deadlock Prevention Techniques</h3>
+                <div class="prevention-panel">
+                    <div class="prevention-technique">
+                        <div class="technique-header">
+                            <span class="technique-icon">🚦</span>
+                            <span class="technique-name">Traffic Signals / Police Control</span>
+                        </div>
+                        <div class="technique-breaks">Breaks: Hold & Wait + Circular Wait</div>
+                        <div class="technique-desc">Cars must stop at red, not enter intersection until they fully pass</div>
+                    </div>
+                    
+                    <div class="prevention-technique">
+                        <div class="technique-header">
+                            <span class="technique-icon">📋</span>
+                            <span class="technique-name">Priority / Direction Ordering</span>
+                        </div>
+                        <div class="technique-breaks">Breaks: Circular Wait</div>
+                        <div class="technique-desc">Example: N(0) → E(1) → S(2) → W(3) fixed priority ordering</div>
+                    </div>
+                    
+                    <div class="prevention-technique">
+                        <div class="technique-header">
+                            <span class="technique-icon">🔒</span>
+                            <span class="technique-name">Full Path Reservation</span>
+                        </div>
+                        <div class="technique-breaks">Breaks: Hold & Wait</div>
+                        <div class="technique-desc">No car enters unless full path is free - all-or-nothing allocation</div>
+                    </div>
+                    
+                    <div class="prevention-technique">
+                        <div class="technique-header">
+                            <span class="technique-icon">➡️</span>
+                            <span class="technique-name">One-way Roads</span>
+                        </div>
+                        <div class="technique-breaks">Breaks: Circular Wait</div>
+                        <div class="technique-desc">Remove circular dependencies completely - unidirectional flow</div>
+                    </div>
+                    
+                    <div class="prevention-technique">
+                        <div class="technique-header">
+                            <span class="technique-icon">🚛</span>
+                            <span class="technique-name">Preemption (Rare)</span>
+                        </div>
+                        <div class="technique-breaks">Breaks: No Preemption</div>
+                        <div class="technique-desc">Tow truck or reverse rule to clear lane (force resource release)</div>
+                    </div>
                 </div>
             </div>
 

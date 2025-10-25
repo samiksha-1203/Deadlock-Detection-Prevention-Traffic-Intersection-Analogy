@@ -176,15 +176,19 @@ function updateModeDisplay() {
 function setMode(newMode) {
     simulationMode = newMode;
     
-    log(`Switched to ${simulationMode.toUpperCase()} mode`, 'info');
+    log(`🔄 Switched to ${simulationMode.toUpperCase()} mode`, 'info');
     updateModeDisplay();
     
     if (simulationMode === 'avoidance') {
-        log('Banker\'s Algorithm: Checks if granting resources keeps system in safe state', 'info');
+        log('🟢 Banker\'s Algorithm: Checks if granting resources keeps system in safe state', 'info');
+        log('Prevents deadlock by ensuring safe sequence always exists', 'info');
     } else if (simulationMode === 'prevention') {
-        log('Resource Ordering: Processes must request resources in order (N→E→S→W)', 'info');
+        log('🟡 Resource Ordering Prevention: Enforces strict ordering on resource requests', 'info');
+        log('Order: R_North(0) → R_East(1) → R_South(2) → R_West(3)', 'info');
+        log('Eliminates Circular Wait condition - deadlock is IMPOSSIBLE by design', 'info');
     } else {
-        log('Detection Mode: Allows all requests, detects cycles in RAG', 'info');
+        log('🔴 Detection Mode: Allows all requests, detects cycles in RAG', 'info');
+        log('Deadlock can occur - will be detected after formation', 'info');
     }
 }
 
@@ -209,24 +213,25 @@ function addCar(direction) {
     
     // MODE-SPECIFIC CHECKS BEFORE ADDING
     if (simulationMode === 'avoidance') {
-        // FIXED: Banker's Algorithm - Check if allocation is safe
+        // Banker's Algorithm - Check if allocation is safe
         if (!checkBankersSafety(direction)) {
             log(`❌ ${carId} request DENIED by Banker's Algorithm - Would create unsafe state`, 'error');
             deniedRequests++;
             updateStats();
             return;
         }
-        log(`✓ ${carId} request APPROVED - System remains safe`, 'success');
+        log(`✅ ${carId} request APPROVED - System remains safe`, 'success');
     } else if (simulationMode === 'prevention') {
         // Resource Ordering: Check if this maintains order
         if (!checkResourceOrdering(direction)) {
             log(`❌ ${carId} request DENIED by Resource Ordering - Would violate order constraint`, 'error');
             log(`Hint: Resources must be requested in order: R_North(0) → R_East(1) → R_South(2) → R_West(3)`, 'warning');
+            log(`Prevention ensures circular wait CANNOT occur by design`, 'info');
             deniedRequests++;
             updateStats();
             return;
         }
-        log(`✓ ${carId} request APPROVED - Maintains resource ordering`, 'success');
+        log(`✅ ${carId} request APPROVED - Maintains resource ordering`, 'success');
     }
     
     carIdCounter++;
@@ -268,7 +273,7 @@ function addCar(direction) {
     setTimeout(() => moveCar(carObj, 'lane'), 500);
 }
 
-// FIXED: Banker's Algorithm safety check
+// Banker's Algorithm safety check
 function checkBankersSafety(direction) {
     // Create a hypothetical scenario where this new car gets its FIRST resource
     const hypotheticalCars = cars.map(c => ({
@@ -310,31 +315,67 @@ function checkResourceOrdering(direction) {
     const nextResource = positions[direction].nextResource;
     const nextOrder = resourceOrder[nextResource];
     
-    // Check if the new car itself would violate ordering
-    // (requesting resources in DECREASING order)
+    // Rule 1: Check if the new car itself would violate ordering
+    // A car requesting resources in DECREASING order violates the rule
     if (requestedOrder > nextOrder) {
-        log(`Resource ordering violation: ${requestedResource}(${requestedOrder}) → ${nextResource}(${nextOrder})`, 'error');
-        return false; // New car would request in wrong order
+        log(`❌ Resource ordering violation: ${requestedResource}(${requestedOrder}) → ${nextResource}(${nextOrder})`, 'error');
+        log(`Cannot request lower-numbered resource after higher-numbered resource`, 'error');
+        return false;
     }
     
-    // Check if adding this car would create potential for circular wait
+    // Rule 2: Check for potential circular wait with existing processes
+    // We need to ensure the new process doesn't create a cycle
     for (const car of cars) {
         if (car.allocated && car.requesting) {
-            const allocatedOrder = resourceOrder[car.allocated];
-            const requestingOrder = resourceOrder[car.requesting];
+            const carAllocatedOrder = resourceOrder[car.allocated];
+            const carRequestingOrder = resourceOrder[car.requesting];
             
-            // If existing car violates ordering, check for conflict
-            if (allocatedOrder > requestingOrder) {
-                // Existing car has backward request
-                // Check if new car would complete a cycle
-                if (requestedOrder > allocatedOrder || nextOrder < requestingOrder) {
-                    log(`Would create circular wait potential with ${car.id}`, 'error');
+            // Check if existing car + new car could form circular wait
+            // Case 1: Existing car holds lower, wants higher (correct)
+            if (carAllocatedOrder < carRequestingOrder) {
+                // New car should not want what existing car holds AND hold what existing car wants
+                if (nextOrder === carAllocatedOrder && requestedOrder === carRequestingOrder) {
+                    log(`❌ Would create circular wait with ${car.id}`, 'error');
+                    log(`${car.id}: ${car.allocated}(${carAllocatedOrder}) → ${car.requesting}(${carRequestingOrder})`, 'error');
+                    return false;
+                }
+            }
+            // Case 2: Existing car violates ordering (holds higher, wants lower)
+            else if (carAllocatedOrder > carRequestingOrder) {
+                // System already has an ordering violation - be very strict
+                log(`⚠️  Warning: ${car.id} already violates ordering`, 'warning');
+                
+                // Don't allow new car if it could complete a cycle
+                if ((requestedOrder < carRequestingOrder && nextOrder > carAllocatedOrder) ||
+                    (requestedOrder > carRequestingOrder && requestedOrder < carAllocatedOrder)) {
+                    log(`❌ Would complete circular wait with ${car.id}`, 'error');
                     return false;
                 }
             }
         }
     }
     
+    // Rule 3: Check against all currently held resources
+    const heldResources = cars
+        .filter(c => c.allocated)
+        .map(c => ({ id: c.id, resource: c.allocated, order: resourceOrder[c.allocated] }));
+    
+    // If new car wants a resource with lower order than any held resource,
+    // and that car might later want what we hold, it could deadlock
+    for (const held of heldResources) {
+        if (nextOrder < held.order && requestedOrder > held.order) {
+            const holdingCar = cars.find(c => c.id === held.id);
+            if (holdingCar && holdingCar.requesting) {
+                const holderWantsOrder = resourceOrder[holdingCar.requesting];
+                if (holderWantsOrder === requestedOrder || holderWantsOrder === nextOrder) {
+                    log(`❌ Circular wait risk with ${held.id} holding ${held.resource}`, 'error');
+                    return false;
+                }
+            }
+        }
+    }
+    
+    log(`✅ Resource ordering maintained: ${requestedResource}(${requestedOrder}) → ${nextResource}(${nextOrder})`, 'success');
     return true;
 }
 
@@ -479,7 +520,7 @@ function tryAdvanceCar(carObj) {
     );
     
     if (!resourceOwner) {
-        // FIXED: In avoidance mode, check safety before granting second resource
+        // In avoidance mode, check safety before granting second resource
         if (simulationMode === 'avoidance') {
             // Simulate granting this resource
             const testCars = cars.map(c => {
@@ -499,7 +540,7 @@ function tryAdvanceCar(carObj) {
                 log(`❌ Cannot grant ${carObj.requesting} to ${carObj.id} - Would create unsafe state`, 'error');
                 return false;
             }
-            log(`✓ Granting ${carObj.requesting} to ${carObj.id} - System remains safe`, 'success');
+            log(`✅ Granting ${carObj.requesting} to ${carObj.id} - System remains safe`, 'success');
         }
         
         // Resource available! Grant it
@@ -547,7 +588,7 @@ function completeCar(carObj) {
         const stillDeadlocked = checkCircularWait();
         if (!stillDeadlocked && isDeadlockDetected) {
             isDeadlockDetected = false;
-            log('✓ Deadlock resolved!', 'success');
+            log('✅ Deadlock resolved!', 'success');
             cars.forEach(c => c.element.classList.remove('deadlocked'));
         }
         
@@ -681,7 +722,7 @@ function detectDeadlock() {
         drawRAG();
         return true;
     } else {
-        log('✓ No deadlock detected - No cycle in RAG', 'success');
+        log('✅ No deadlock detected - No cycle in RAG', 'success');
         drawRAG();
         return false;
     }
@@ -813,7 +854,7 @@ async function runBankersAlgorithm() {
     }
 
     if (safeSequence.length === processes.length) {
-        log(`✓ SAFE STATE: Sequence found: ${safeSequence.join(' → ')}`, 'success');
+        log(`✅ SAFE STATE: Sequence found: ${safeSequence.join(' → ')}`, 'success');
         log('In avoidance mode, this allocation would be ALLOWED', 'success');
         
         const execute = confirm('Execute this safe sequence? (Will complete processes in order)');
@@ -827,10 +868,10 @@ async function runBankersAlgorithm() {
                     await sleep(500);
                 }
             }
-            log('✓ All processes completed safely!', 'success');
+            log('✅ All processes completed safely!', 'success');
         }
     } else {
-        log('✗ UNSAFE STATE: No safe sequence exists', 'error');
+        log('❌ UNSAFE STATE: No safe sequence exists', 'error');
         log('System is in an UNSAFE state - Deadlock possible!', 'error');
         log(`Only ${safeSequence.length} of ${processes.length} processes can complete`, 'error');
         if (safeSequence.length > 0) {
@@ -1044,7 +1085,7 @@ function drawRAG(showDeadlock = null) {
         ctx.fillStyle = '#10b981';
         ctx.font = `bold ${isMobile ? 9 : (isTablet ? 11 : 14)}px Arial`;
         ctx.textAlign = 'center';
-        ctx.fillText('✓ No cycle - System is safe', w/2, h - bottomMargin);
+        ctx.fillText('✅ No cycle - System is safe', w/2, h - bottomMargin);
     }
 }
 
