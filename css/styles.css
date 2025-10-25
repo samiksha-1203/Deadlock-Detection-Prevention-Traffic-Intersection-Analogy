@@ -119,18 +119,42 @@ body.dark .mode-selector {
     transform: translateY(-2px);
 }
 
-/* Three Column Grid - NEW */
-.three-column-grid {
+/* MAIN GRID LAYOUT */
+.main-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr 400px;
     gap: 20px;
     margin-bottom: 20px;
 }
 
-/* Two Column Grid */
-.two-column-grid {
+.left-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* ROW 1: Intersection + RAG (equal height) */
+.row-1-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+/* ROW 2: Coffman (small height, full width) */
+.coffman-panel {
+    width: 100%;
+}
+
+.coffman-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+/* ROW 3: Resource Status + Event Log + Banker's (equal height) */
+.row-3-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 20px;
     margin-bottom: 20px;
 }
@@ -145,6 +169,13 @@ body.dark .mode-selector {
 body.dark .panel {
     background: #2a2a3e;
     color: #e0e0e0;
+}
+
+/* Controls Sidebar (spans full height) */
+.controls-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: fit-content;
 }
 
 h3 {
@@ -304,7 +335,7 @@ body.dark .road {
 
 .rag-canvas {
     width: 100%;
-    height: 500px;
+    height: 450px;
     background: #f9fafb;
     border-radius: 8px;
     border: 2px solid #e5e7eb;
@@ -414,13 +445,13 @@ body.dark .resource-item {
 }
 
 .banker-display {
-    margin-top: 15px;
+    margin-top: 0;
     padding: 15px;
     background: #f3f4f6;
     border-radius: 8px;
     font-family: 'Courier New', monospace;
     font-size: 12px;
-    max-height: 500px;
+    max-height: 400px;
     overflow-y: auto;
 }
 
@@ -515,10 +546,9 @@ body.dark .log-error {
 
 .condition-box {
     background: #f3f4f6;
-    padding: 12px;
+    padding: 10px;
     border-radius: 6px;
     border-left: 4px solid #9ca3af;
-    margin: 8px 0;
     transition: all 0.3s ease;
 }
 
@@ -537,12 +567,12 @@ body.dark .condition-box.active {
 
 .condition-title {
     font-weight: bold;
-    margin-bottom: 5px;
-    font-size: 14px;
+    margin-bottom: 3px;
+    font-size: 13px;
 }
 
 .condition-desc {
-    font-size: 12px;
+    font-size: 11px;
     color: #6b7280;
 }
 
@@ -629,21 +659,19 @@ body.dark .info-content strong {
 
 /* Mobile Responsiveness */
 @media (max-width: 1400px) {
-    .three-column-grid {
+    .main-grid {
         grid-template-columns: 1fr;
     }
     
-    .two-column-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 1200px) {
-    .three-column-grid {
+    .row-1-grid {
         grid-template-columns: 1fr;
     }
     
-    .two-column-grid {
+    .coffman-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .row-3-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -754,6 +782,19 @@ body.dark .info-content strong {
         font-size: 12px;
         padding: 8px;
     }
+    
+    .coffman-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .condition-title {
+        font-size: 12px;
+    }
+    
+    .condition-desc {
+        font-size: 10px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -810,11 +851,11 @@ body.dark .info-content strong {
     }
 
     .condition-title {
-        font-size: 13px;
+        font-size: 11px;
     }
 
     .condition-desc {
-        font-size: 11px;
+        font-size: 9px;
     }
 
     .direction-grid {

@@ -209,7 +209,7 @@ function addCar(direction) {
     
     // MODE-SPECIFIC CHECKS BEFORE ADDING
     if (simulationMode === 'avoidance') {
-        // Banker's Algorithm: Check if allocation is safe
+        // FIXED: Banker's Algorithm - Check if allocation is safe
         if (!checkBankersSafety(direction)) {
             log(`❌ ${carId} request DENIED by Banker's Algorithm - Would create unsafe state`, 'error');
             deniedRequests++;
@@ -268,12 +268,20 @@ function addCar(direction) {
     setTimeout(() => moveCar(carObj, 'lane'), 500);
 }
 
+// FIXED: Banker's Algorithm safety check
 function checkBankersSafety(direction) {
-    // Simulate adding this car and check if safe state exists
-    const hypotheticalCars = [...cars];
+    // Create a hypothetical scenario where this new car gets its FIRST resource
+    const hypotheticalCars = cars.map(c => ({
+        id: c.id,
+        direction: c.direction,
+        allocated: c.allocated,
+        requesting: c.requesting,
+        maxDemand: { ...c.maxDemand },
+        state: c.state
+    }));
     
-    // Create hypothetical car
-    const hypotheticalCar = {
+    // Add the new car with ONLY first resource allocated
+    const newCar = {
         id: `P${carIdCounter}`,
         direction: direction,
         allocated: positions[direction].resource,
@@ -282,41 +290,49 @@ function checkBankersSafety(direction) {
         state: 'waiting'
     };
     
-    hypotheticalCars.push(hypotheticalCar);
+    hypotheticalCars.push(newCar);
     
-    // Check if safe sequence exists with this allocation
-    return findSafeSequence(hypotheticalCars) !== null;
+    // Check if a safe sequence exists with this allocation
+    const safeSeq = findSafeSequence(hypotheticalCars);
+    
+    if (safeSeq === null) {
+        log(`Banker's Analysis: No safe sequence exists if ${newCar.id} is added`, 'warning');
+        return false;
+    }
+    
+    log(`Banker's Analysis: Safe sequence exists: ${safeSeq.join(' → ')}`, 'success');
+    return true;
 }
 
 function checkResourceOrdering(direction) {
     const requestedResource = positions[direction].resource;
     const requestedOrder = resourceOrder[requestedResource];
+    const nextResource = positions[direction].nextResource;
+    const nextOrder = resourceOrder[nextResource];
     
-    // Check if any existing process holds a resource with higher order
-    // and is requesting a resource with lower order (would create potential for circular wait)
+    // Check if the new car itself would violate ordering
+    // (requesting resources in DECREASING order)
+    if (requestedOrder > nextOrder) {
+        log(`Resource ordering violation: ${requestedResource}(${requestedOrder}) → ${nextResource}(${nextOrder})`, 'error');
+        return false; // New car would request in wrong order
+    }
     
+    // Check if adding this car would create potential for circular wait
     for (const car of cars) {
         if (car.allocated && car.requesting) {
             const allocatedOrder = resourceOrder[car.allocated];
             const requestingOrder = resourceOrder[car.requesting];
             
-            // If this car is requesting in wrong order, check conflict
+            // If existing car violates ordering, check for conflict
             if (allocatedOrder > requestingOrder) {
-                // Existing car violates ordering
-                // Check if new car would create a cycle
-                if (requestedOrder > allocatedOrder) {
-                    return false; // Would create circular wait potential
+                // Existing car has backward request
+                // Check if new car would complete a cycle
+                if (requestedOrder > allocatedOrder || nextOrder < requestingOrder) {
+                    log(`Would create circular wait potential with ${car.id}`, 'error');
+                    return false;
                 }
             }
         }
-    }
-    
-    // Check if the new car itself would violate ordering
-    const nextResource = positions[direction].nextResource;
-    const nextOrder = resourceOrder[nextResource];
-    
-    if (requestedOrder > nextOrder) {
-        return false; // New car would request in wrong order
     }
     
     return true;
@@ -355,7 +371,7 @@ function findSafeSequence(carsList) {
         });
     });
     
-    // Find safe sequence
+    // Find safe sequence using Banker's Algorithm
     const safeSequence = [];
     const finished = new Set();
     const work = { ...available };
@@ -370,6 +386,7 @@ function findSafeSequence(carsList) {
         for (const p of waitingCars) {
             if (finished.has(p.id)) continue;
             
+            // Check if this process can finish with available resources
             let canFinish = true;
             for (const res of resources) {
                 if (need[p.id][res] > work[res]) {
@@ -379,6 +396,7 @@ function findSafeSequence(carsList) {
             }
             
             if (canFinish) {
+                // This process can complete, release its resources
                 for (const res of resources) {
                     work[res] += allocation[p.id][res];
                 }
@@ -461,6 +479,29 @@ function tryAdvanceCar(carObj) {
     );
     
     if (!resourceOwner) {
+        // FIXED: In avoidance mode, check safety before granting second resource
+        if (simulationMode === 'avoidance') {
+            // Simulate granting this resource
+            const testCars = cars.map(c => {
+                if (c.id === carObj.id) {
+                    return {
+                        ...c,
+                        allocated: carObj.requesting, // Now has both resources (will release first)
+                        requesting: null,
+                        state: 'waiting'
+                    };
+                }
+                return { ...c };
+            });
+            
+            const safeSeq = findSafeSequence(testCars);
+            if (safeSeq === null) {
+                log(`❌ Cannot grant ${carObj.requesting} to ${carObj.id} - Would create unsafe state`, 'error');
+                return false;
+            }
+            log(`✓ Granting ${carObj.requesting} to ${carObj.id} - System remains safe`, 'success');
+        }
+        
         // Resource available! Grant it
         log(`${carObj.id} granted ${carObj.requesting}`, 'success');
         
@@ -706,7 +747,7 @@ async function runBankersAlgorithm() {
 
     processes.forEach(p => {
         allocation[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
-        max[p.id] = { ...p.maxDemand }; // Use predefined max demand
+        max[p.id] = { ...p.maxDemand };
         need[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
 
         if (p.allocated) {

@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deadlock Detection & Prevention - OS Project</title>
     <link rel="stylesheet" href="css/styles.css">
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
-    <link rel="icon" href="assets/favicon/favicon.ico" type="image/x-icon">
 </head>
 <body>
     <div class="container">
@@ -39,31 +35,58 @@
             </div>
         </header>
 
-        <!-- Three Column Layout -->
-        <div class="three-column-grid">
-            <!-- Column 1: Traffic Intersection -->
-            <div class="panel intersection-panel">
-                <h3>Traffic Intersection Model</h3>
-                <div class="intersection-container" id="intersection">
-                    <div class="road road-vertical"></div>
-                    <div class="road road-horizontal"></div>
-                    <div class="intersection-center">INTERSECTION<br>(Shared Resource)</div>
-                    
-                    <div class="lane-marker lane-north">R_North</div>
-                    <div class="lane-marker lane-south">R_South</div>
-                    <div class="lane-marker lane-east">R_East</div>
-                    <div class="lane-marker lane-west">R_West</div>
+        <!-- ROW 1: Intersection + RAG + Controls (sidebar) -->
+        <div class="main-grid">
+            <!-- Left Side: Intersection + RAG + Coffman -->
+            <div class="left-content">
+                <!-- ROW 1: Intersection + RAG -->
+                <div class="row-1-grid">
+                    <div class="panel intersection-panel">
+                        <h3>Traffic Intersection Model</h3>
+                        <div class="intersection-container" id="intersection">
+                            <div class="road road-vertical"></div>
+                            <div class="road road-horizontal"></div>
+                            <div class="intersection-center">INTERSECTION<br>(Shared Resource)</div>
+                            
+                            <div class="lane-marker lane-north">R_North</div>
+                            <div class="lane-marker lane-south">R_South</div>
+                            <div class="lane-marker lane-east">R_East</div>
+                            <div class="lane-marker lane-west">R_West</div>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <h3>Resource Allocation Graph (RAG)</h3>
+                        <canvas id="ragCanvas" class="rag-canvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- ROW 2: Coffman Conditions (small height) -->
+                <div class="panel coffman-panel">
+                    <h3>Deadlock Conditions (Coffman Conditions)</h3>
+                    <div class="coffman-grid">
+                        <div class="condition-box" id="cond1">
+                            <div class="condition-title">1. Mutual Exclusion ✓</div>
+                            <div class="condition-desc">Resources cannot be shared - only one process at a time</div>
+                        </div>
+                        <div class="condition-box" id="cond2">
+                            <div class="condition-title">2. Hold and Wait</div>
+                            <div class="condition-desc">Process holds resources while waiting for others</div>
+                        </div>
+                        <div class="condition-box" id="cond3">
+                            <div class="condition-title">3. No Preemption ✓</div>
+                            <div class="condition-desc">Resources cannot be forcefully taken away</div>
+                        </div>
+                        <div class="condition-box" id="cond4">
+                            <div class="condition-title">4. Circular Wait</div>
+                            <div class="condition-desc">Circular chain of processes waiting for resources</div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Column 2: RAG -->
-            <div class="panel">
-                <h3>Resource Allocation Graph (RAG)</h3>
-                <canvas id="ragCanvas" class="rag-canvas"></canvas>
-            </div>
-
-            <!-- Column 3: Controls -->
-            <div class="panel">
+            <!-- Right Sidebar: Controls (spans down) -->
+            <div class="panel controls-sidebar">
                 <h3>Controls</h3>
                 
                 <h4 class="section-title">Add Processes (Cars)</h4>
@@ -101,51 +124,27 @@
             </div>
         </div>
 
-        <!-- Two Column Layout Below -->
-        <div class="two-column-grid">
-            <div>
-                <div class="panel">
-                    <h3>📊 Resource Status</h3>
-                    <div id="resourceStatus" class="resource-status-panel">
-                        <div class="resource-item"><strong>R_North:</strong> FREE</div>
-                        <div class="resource-item"><strong>R_South:</strong> FREE</div>
-                        <div class="resource-item"><strong>R_East:</strong> FREE</div>
-                        <div class="resource-item"><strong>R_West:</strong> FREE</div>
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <h3>Deadlock Conditions (Coffman Conditions)</h3>
-                    <div class="condition-box" id="cond1">
-                        <div class="condition-title">1. Mutual Exclusion ✓</div>
-                        <div class="condition-desc">Resources cannot be shared - only one process at a time (single-instance resources)</div>
-                    </div>
-                    <div class="condition-box" id="cond2">
-                        <div class="condition-title">2. Hold and Wait</div>
-                        <div class="condition-desc">Process holds resources while waiting for others</div>
-                    </div>
-                    <div class="condition-box" id="cond3">
-                        <div class="condition-title">3. No Preemption ✓</div>
-                        <div class="condition-desc">Resources cannot be forcefully taken away</div>
-                    </div>
-                    <div class="condition-box" id="cond4">
-                        <div class="condition-title">4. Circular Wait</div>
-                        <div class="condition-desc">Circular chain of processes waiting for resources</div>
-                    </div>
+        <!-- ROW 3: Resource Status + Event Log + Banker's -->
+        <div class="row-3-grid">
+            <div class="panel">
+                <h3>📊 Resource Status</h3>
+                <div id="resourceStatus" class="resource-status-panel">
+                    <div class="resource-item"><strong>R_North:</strong> FREE</div>
+                    <div class="resource-item"><strong>R_South:</strong> FREE</div>
+                    <div class="resource-item"><strong>R_East:</strong> FREE</div>
+                    <div class="resource-item"><strong>R_West:</strong> FREE</div>
                 </div>
             </div>
 
-            <div>
-                <div class="panel">
-                    <h3>Banker's Algorithm Matrices</h3>
-                    <div id="bankerDisplay" class="banker-display">
-                        <em>Run Banker's Algorithm to see allocation matrices...</em>
-                    </div>
-                </div>
+            <div class="panel">
+                <h3>Event Log</h3>
+                <div class="log-panel" id="logPanel"></div>
+            </div>
 
-                <div class="panel">
-                    <h3>Event Log</h3>
-                    <div class="log-panel" id="logPanel"></div>
+            <div class="panel">
+                <h3>Banker's Algorithm Matrices</h3>
+                <div id="bankerDisplay" class="banker-display">
+                    <em>Run Banker's Algorithm to see allocation matrices...</em>
                 </div>
             </div>
         </div>
@@ -172,6 +171,13 @@
                     <li><strong>Max Matrix:</strong> Declared upfront - each car declares its full resource need (entry + exit lane)</li>
                     <li><strong>Safe State:</strong> A state where there exists a sequence to complete all processes</li>
                     <li><strong>Resource Ordering:</strong> If all processes request resources in the same order, no circular wait can form</li>
+                </ul>
+                
+                <p><strong>Testing Instructions:</strong></p>
+                <ul>
+                    <li><strong>Detection:</strong> Add North, East, South, West → Click "Detect Deadlock" → See cycle</li>
+                    <li><strong>Avoidance:</strong> Add 3 cars → Try 4th → Gets denied (unsafe state)</li>
+                    <li><strong>Prevention:</strong> Add North, East, South → Try West → Denied (violates ordering 3→0)</li>
                 </ul>
             </div>
         </div>
