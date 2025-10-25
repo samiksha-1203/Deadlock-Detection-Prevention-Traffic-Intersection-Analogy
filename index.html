@@ -5,84 +5,127 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deadlock Detection & Prevention - OS Project</title>
     <link rel="stylesheet" href="css/styles.css">
-    <!-- 🚦 Favicon Setup -->
     <link rel="apple-touch-icon" sizes="180x180" href="assets/favicon/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
     <link rel="icon" href="assets/favicon/favicon.ico" type="image/x-icon">
-
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🚦 Deadlock Detection & Prevention Simulator (Traffic Intersection Analogy) 🚗💻</h1>
             <p class="subtitle">Operating Systems - Resource Allocation Graphs & Banker's Algorithm</p>
+            
+            <div class="mode-selector">
+                <h3 style="color: white; margin-bottom: 15px;">🎮 Simulation Mode</h3>
+                <div class="mode-buttons">
+                    <button class="mode-btn active" data-mode="detection">
+                        <span class="mode-icon">🔴</span>
+                        <span class="mode-name">Detection</span>
+                        <span class="mode-desc">Allows all requests, detects cycles</span>
+                    </button>
+                    <button class="mode-btn" data-mode="avoidance">
+                        <span class="mode-icon">🟢</span>
+                        <span class="mode-name">Avoidance (Banker's)</span>
+                        <span class="mode-desc">Checks safe state before allowing</span>
+                    </button>
+                    <button class="mode-btn" data-mode="prevention">
+                        <span class="mode-icon">🟡</span>
+                        <span class="mode-name">Prevention</span>
+                        <span class="mode-desc">Uses resource ordering (N→E→S→W)</span>
+                    </button>
+                </div>
+                <button class="btn-toggle-dark" id="darkModeToggle">🌙 Toggle Dark Mode</button>
+            </div>
         </header>
 
-        <div class="main-grid">
-            <div>
-                <div class="panel intersection-panel">
-                    <h3>Traffic Intersection Model</h3>
-                    <div class="intersection-container" id="intersection">
-                        <div class="road road-vertical"></div>
-                        <div class="road road-horizontal"></div>
-                        <div class="intersection-center">INTERSECTION<br>(Shared Resource)</div>
-                        
-                        <div class="lane-marker lane-north">R_North</div>
-                        <div class="lane-marker lane-south">R_South</div>
-                        <div class="lane-marker lane-east">R_East</div>
-                        <div class="lane-marker lane-west">R_West</div>
-                    </div>
-                </div>
-
-                <div class="panel">
-                    <h3>Controls</h3>
-                    <button class="btn btn-toggle" id="darkModeToggle">Toggle Dark Mode</button>
+        <!-- Three Column Layout -->
+        <div class="three-column-grid">
+            <!-- Column 1: Traffic Intersection -->
+            <div class="panel intersection-panel">
+                <h3>Traffic Intersection Model</h3>
+                <div class="intersection-container" id="intersection">
+                    <div class="road road-vertical"></div>
+                    <div class="road road-horizontal"></div>
+                    <div class="intersection-center">INTERSECTION<br>(Shared Resource)</div>
                     
-                    <h4 class="section-title">Add Processes (Cars)</h4>
-                    <div class="direction-grid">
-                        <button class="btn btn-add" data-direction="north">North</button>
-                        <button class="btn btn-add" data-direction="south">South</button>
-                        <button class="btn btn-add" data-direction="east">East</button>
-                        <button class="btn btn-add" data-direction="west">West</button>
-                    </div>
-                    
-                    <h4 class="section-title">Algorithms</h4>
-                    <button class="btn btn-detect" id="detectBtn">Detect Deadlock (RAG Cycle Detection)</button>
-                    <button class="btn btn-banker" id="bankerBtn">Run Banker's Algorithm</button>
-                    <button class="btn btn-reset" id="resetBtn">Reset Simulation</button>
-
-                    <div class="stats">
-                        <div class="stat-box">
-                            <div class="stat-value" id="carCount">0</div>
-                            <div class="stat-label">Active Processes</div>
-                        </div>
-                        <div class="stat-box">
-                            <div class="stat-value" id="deadlockCount">0</div>
-                            <div class="stat-label">Deadlocks Detected</div>
-                        </div>
-                    </div>
+                    <div class="lane-marker lane-north">R_North</div>
+                    <div class="lane-marker lane-south">R_South</div>
+                    <div class="lane-marker lane-east">R_East</div>
+                    <div class="lane-marker lane-west">R_West</div>
                 </div>
             </div>
 
+            <!-- Column 2: RAG -->
+            <div class="panel">
+                <h3>Resource Allocation Graph (RAG)</h3>
+                <canvas id="ragCanvas" class="rag-canvas"></canvas>
+            </div>
+
+            <!-- Column 3: Controls -->
+            <div class="panel">
+                <h3>Controls</h3>
+                
+                <h4 class="section-title">Add Processes (Cars)</h4>
+                <div class="direction-grid">
+                    <button class="btn btn-add" data-direction="north">🔵 North</button>
+                    <button class="btn btn-add" data-direction="south">🔴 South</button>
+                    <button class="btn btn-add" data-direction="east">🟢 East</button>
+                    <button class="btn btn-add" data-direction="west">🟡 West</button>
+                </div>
+                
+                <h4 class="section-title">Algorithms & Actions</h4>
+                <button class="btn btn-detect" id="detectBtn">🔍 Detect Deadlock (RAG)</button>
+                <button class="btn btn-banker" id="bankerBtn">💚 Run Banker's Algorithm</button>
+                <button class="btn btn-advance" id="advanceBtn">▶️ Advance Cars</button>
+                <button class="btn btn-reset" id="resetBtn">🔄 Reset Simulation</button>
+
+                <div class="stats">
+                    <div class="stat-box">
+                        <div class="stat-value" id="carCount">0</div>
+                        <div class="stat-label">Active Processes</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="deadlockCount">0</div>
+                        <div class="stat-label">Deadlocks Detected</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="completedCount">0</div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="deniedCount">0</div>
+                        <div class="stat-label">Denied Requests</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Two Column Layout Below -->
+        <div class="two-column-grid">
             <div>
                 <div class="panel">
-                    <h3>Resource Allocation Graph (RAG)</h3>
-                    <canvas id="ragCanvas" class="rag-canvas"></canvas>
+                    <h3>📊 Resource Status</h3>
+                    <div id="resourceStatus" class="resource-status-panel">
+                        <div class="resource-item"><strong>R_North:</strong> FREE</div>
+                        <div class="resource-item"><strong>R_South:</strong> FREE</div>
+                        <div class="resource-item"><strong>R_East:</strong> FREE</div>
+                        <div class="resource-item"><strong>R_West:</strong> FREE</div>
+                    </div>
                 </div>
 
                 <div class="panel">
                     <h3>Deadlock Conditions (Coffman Conditions)</h3>
                     <div class="condition-box" id="cond1">
-                        <div class="condition-title">1. Mutual Exclusion</div>
-                        <div class="condition-desc">Resources cannot be shared - only one process at a time</div>
+                        <div class="condition-title">1. Mutual Exclusion ✓</div>
+                        <div class="condition-desc">Resources cannot be shared - only one process at a time (single-instance resources)</div>
                     </div>
                     <div class="condition-box" id="cond2">
                         <div class="condition-title">2. Hold and Wait</div>
                         <div class="condition-desc">Process holds resources while waiting for others</div>
                     </div>
                     <div class="condition-box" id="cond3">
-                        <div class="condition-title">3. No Preemption</div>
+                        <div class="condition-title">3. No Preemption ✓</div>
                         <div class="condition-desc">Resources cannot be forcefully taken away</div>
                     </div>
                     <div class="condition-box" id="cond4">
@@ -90,7 +133,9 @@
                         <div class="condition-desc">Circular chain of processes waiting for resources</div>
                     </div>
                 </div>
+            </div>
 
+            <div>
                 <div class="panel">
                     <h3>Banker's Algorithm Matrices</h3>
                     <div id="bankerDisplay" class="banker-display">
@@ -102,6 +147,32 @@
                     <h3>Event Log</h3>
                     <div class="log-panel" id="logPanel"></div>
                 </div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3>ℹ️ How It Works</h3>
+            <div class="info-content">
+                <p><strong>Model Mapping:</strong></p>
+                <ul>
+                    <li>🚗 <strong>Cars = Processes</strong> (P1, P2, P3, P4)</li>
+                    <li>🛣️ <strong>Lanes = Resources</strong> (R_North, R_South, R_East, R_West) - Single instance each</li>
+                    <li>⚡ <strong>Each car needs 2 resources:</strong> Entry lane + Exit lane to complete journey</li>
+                </ul>
+                
+                <p><strong>Three Modes:</strong></p>
+                <ul>
+                    <li>🔴 <strong>Detection Mode:</strong> Allows all requests, then detects deadlock using RAG cycle detection</li>
+                    <li>🟢 <strong>Avoidance Mode (Banker's):</strong> Checks if granting request keeps system in safe state before allowing</li>
+                    <li>🟡 <strong>Prevention Mode:</strong> Uses resource ordering (N→E→S→W) to prevent circular wait</li>
+                </ul>
+
+                <p><strong>Key Concepts:</strong></p>
+                <ul>
+                    <li><strong>Max Matrix:</strong> Declared upfront - each car declares its full resource need (entry + exit lane)</li>
+                    <li><strong>Safe State:</strong> A state where there exists a sequence to complete all processes</li>
+                    <li><strong>Resource Ordering:</strong> If all processes request resources in the same order, no circular wait can form</li>
+                </ul>
             </div>
         </div>
     </div>

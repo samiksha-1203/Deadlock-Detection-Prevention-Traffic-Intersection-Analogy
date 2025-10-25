@@ -3,12 +3,16 @@ let carIdCounter = 1;
 let deadlockCount = 0;
 let canvas, ctx;
 let isDeadlockDetected = false;
+let simulationMode = 'detection'; // 'detection', 'avoidance', or 'prevention'
+let completedProcesses = 0;
+let deniedRequests = 0;
 
 const positions = {
     north: {
         start: { left: 46.43, top: -10.71 },
         laneBase: { left: 46.43, top: 21.43 },
         intersection: { left: 46.43, top: 46.43 },
+        exit: { left: 46.43, top: 110.71 },
         resource: 'R_North',
         nextResource: 'R_East',
         offsetAxis: 'top',
@@ -18,6 +22,7 @@ const positions = {
         start: { left: 46.43, top: 110.71 },
         laneBase: { left: 46.43, top: 78.57 },
         intersection: { left: 46.43, top: 53.57 },
+        exit: { left: 46.43, top: -10.71 },
         resource: 'R_South',
         nextResource: 'R_West',
         offsetAxis: 'top',
@@ -27,6 +32,7 @@ const positions = {
         start: { left: 110.71, top: 46.43 },
         laneBase: { left: 78.57, top: 46.43 },
         intersection: { left: 53.57, top: 46.43 },
+        exit: { left: -10.71, top: 46.43 },
         resource: 'R_East',
         nextResource: 'R_South',
         offsetAxis: 'left',
@@ -36,11 +42,28 @@ const positions = {
         start: { left: -10.71, top: 46.43 },
         laneBase: { left: 21.43, top: 46.43 },
         intersection: { left: 46.43, top: 46.43 },
+        exit: { left: 110.71, top: 46.43 },
         resource: 'R_West',
         nextResource: 'R_North',
         offsetAxis: 'left',
         offsetDirection: -1
     }
+};
+
+// Define max demand for each car direction (for Banker's Algorithm)
+const maxDemands = {
+    north: { R_North: 1, R_South: 0, R_East: 1, R_West: 0 },
+    south: { R_North: 0, R_South: 1, R_East: 0, R_West: 1 },
+    east: { R_North: 0, R_South: 1, R_East: 1, R_West: 0 },
+    west: { R_North: 1, R_South: 0, R_East: 0, R_West: 1 }
+};
+
+// Resource ordering for prevention (prevents circular wait)
+const resourceOrder = {
+    R_North: 0,
+    R_East: 1,
+    R_South: 2,
+    R_West: 3
 };
 
 function init() {
@@ -49,10 +72,13 @@ function init() {
     resizeCanvas();
     
     setupEventListeners();
+    updateModeDisplay();
     
     log('System initialized - Deadlock Detection & Prevention Simulator', 'success');
-    log('Model: Cars=Processes, Lanes=Resources, Intersection=Critical Section', 'info');
+    log('Model: Cars=Processes, Lanes=Resources (single-instance)', 'info');
+    log(`Mode: ${simulationMode.toUpperCase()}`, 'info');
     updateStats();
+    updateResourceStatus();
     drawRAG();
 }
 
@@ -63,10 +89,19 @@ function setupEventListeners() {
         });
     });
 
+    // Mode selector buttons
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const newMode = this.dataset.mode;
+            setMode(newMode);
+        });
+    });
+
     document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
     document.getElementById('detectBtn').addEventListener('click', detectDeadlock);
     document.getElementById('bankerBtn').addEventListener('click', runBankersAlgorithm);
     document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+    document.getElementById('advanceBtn').addEventListener('click', advanceAllCars);
 
     window.addEventListener('resize', () => {
         if (canvas) {
@@ -109,6 +144,48 @@ function log(message, type = 'info') {
 function updateStats() {
     document.getElementById('carCount').textContent = cars.length;
     document.getElementById('deadlockCount').textContent = deadlockCount;
+    document.getElementById('completedCount').textContent = completedProcesses;
+    document.getElementById('deniedCount').textContent = deniedRequests;
+}
+
+function updateResourceStatus() {
+    const resources = ['R_North', 'R_South', 'R_East', 'R_West'];
+    const html = resources.map(r => {
+        const owner = cars.find(c => c.allocated === r);
+        const waiters = cars.filter(c => c.requesting === r);
+        
+        let status = owner ? `<span style="color: #ef4444;">BUSY (${owner.id})</span>` : '<span style="color: #10b981;">FREE</span>';
+        let waitList = waiters.length > 0 ? ` | Waiting: ${waiters.map(c => c.id).join(', ')}` : '';
+        
+        return `<div class="resource-item"><strong>${r}:</strong> ${status}${waitList}</div>`;
+    }).join('');
+    
+    document.getElementById('resourceStatus').innerHTML = html;
+}
+
+function updateModeDisplay() {
+    // Update active button
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.mode === simulationMode) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function setMode(newMode) {
+    simulationMode = newMode;
+    
+    log(`Switched to ${simulationMode.toUpperCase()} mode`, 'info');
+    updateModeDisplay();
+    
+    if (simulationMode === 'avoidance') {
+        log('Banker\'s Algorithm: Checks if granting resources keeps system in safe state', 'info');
+    } else if (simulationMode === 'prevention') {
+        log('Resource Ordering: Processes must request resources in order (N→E→S→W)', 'info');
+    } else {
+        log('Detection Mode: Allows all requests, detects cycles in RAG', 'info');
+    }
 }
 
 function getCarsInDirection(direction) {
@@ -129,6 +206,29 @@ function calculateLanePosition(direction, index) {
 
 function addCar(direction) {
     const carId = `P${carIdCounter}`;
+    
+    // MODE-SPECIFIC CHECKS BEFORE ADDING
+    if (simulationMode === 'avoidance') {
+        // Banker's Algorithm: Check if allocation is safe
+        if (!checkBankersSafety(direction)) {
+            log(`❌ ${carId} request DENIED by Banker's Algorithm - Would create unsafe state`, 'error');
+            deniedRequests++;
+            updateStats();
+            return;
+        }
+        log(`✓ ${carId} request APPROVED - System remains safe`, 'success');
+    } else if (simulationMode === 'prevention') {
+        // Resource Ordering: Check if this maintains order
+        if (!checkResourceOrdering(direction)) {
+            log(`❌ ${carId} request DENIED by Resource Ordering - Would violate order constraint`, 'error');
+            log(`Hint: Resources must be requested in order: R_North(0) → R_East(1) → R_South(2) → R_West(3)`, 'warning');
+            deniedRequests++;
+            updateStats();
+            return;
+        }
+        log(`✓ ${carId} request APPROVED - Maintains resource ordering`, 'success');
+    }
+    
     carIdCounter++;
     
     const car = document.createElement('div');
@@ -154,15 +254,144 @@ function addCar(direction) {
         position: 'start',
         allocated: null,
         requesting: positions[direction].resource,
-        laneIndex: laneIndex
+        maxDemand: { ...maxDemands[direction] },
+        laneIndex: laneIndex,
+        timestamp: Date.now()
     };
 
     cars.push(carObj);
     log(`${carId} created - Requesting ${positions[direction].resource}`, 'info');
     
     updateStats();
+    updateResourceStatus();
 
     setTimeout(() => moveCar(carObj, 'lane'), 500);
+}
+
+function checkBankersSafety(direction) {
+    // Simulate adding this car and check if safe state exists
+    const hypotheticalCars = [...cars];
+    
+    // Create hypothetical car
+    const hypotheticalCar = {
+        id: `P${carIdCounter}`,
+        direction: direction,
+        allocated: positions[direction].resource,
+        requesting: positions[direction].nextResource,
+        maxDemand: { ...maxDemands[direction] },
+        state: 'waiting'
+    };
+    
+    hypotheticalCars.push(hypotheticalCar);
+    
+    // Check if safe sequence exists with this allocation
+    return findSafeSequence(hypotheticalCars) !== null;
+}
+
+function checkResourceOrdering(direction) {
+    const requestedResource = positions[direction].resource;
+    const requestedOrder = resourceOrder[requestedResource];
+    
+    // Check if any existing process holds a resource with higher order
+    // and is requesting a resource with lower order (would create potential for circular wait)
+    
+    for (const car of cars) {
+        if (car.allocated && car.requesting) {
+            const allocatedOrder = resourceOrder[car.allocated];
+            const requestingOrder = resourceOrder[car.requesting];
+            
+            // If this car is requesting in wrong order, check conflict
+            if (allocatedOrder > requestingOrder) {
+                // Existing car violates ordering
+                // Check if new car would create a cycle
+                if (requestedOrder > allocatedOrder) {
+                    return false; // Would create circular wait potential
+                }
+            }
+        }
+    }
+    
+    // Check if the new car itself would violate ordering
+    const nextResource = positions[direction].nextResource;
+    const nextOrder = resourceOrder[nextResource];
+    
+    if (requestedOrder > nextOrder) {
+        return false; // New car would request in wrong order
+    }
+    
+    return true;
+}
+
+function findSafeSequence(carsList) {
+    const waitingCars = carsList.filter(c => c.state === 'waiting' || c.state === 'approaching');
+    if (waitingCars.length === 0) return [];
+    
+    const resources = ['R_North', 'R_South', 'R_East', 'R_West'];
+    const totalResources = { R_North: 1, R_South: 1, R_East: 1, R_West: 1 };
+    
+    // Calculate allocation matrix
+    const allocation = {};
+    waitingCars.forEach(p => {
+        allocation[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
+        if (p.allocated) {
+            allocation[p.id][p.allocated] = 1;
+        }
+    });
+    
+    // Calculate need matrix
+    const need = {};
+    waitingCars.forEach(p => {
+        need[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
+        resources.forEach(r => {
+            need[p.id][r] = p.maxDemand[r] - allocation[p.id][r];
+        });
+    });
+    
+    // Calculate available
+    const available = { ...totalResources };
+    waitingCars.forEach(p => {
+        resources.forEach(r => {
+            available[r] -= allocation[p.id][r];
+        });
+    });
+    
+    // Find safe sequence
+    const safeSequence = [];
+    const finished = new Set();
+    const work = { ...available };
+    
+    let found = true;
+    let iterations = 0;
+    
+    while (finished.size < waitingCars.length && found && iterations < 100) {
+        found = false;
+        iterations++;
+        
+        for (const p of waitingCars) {
+            if (finished.has(p.id)) continue;
+            
+            let canFinish = true;
+            for (const res of resources) {
+                if (need[p.id][res] > work[res]) {
+                    canFinish = false;
+                    break;
+                }
+            }
+            
+            if (canFinish) {
+                for (const res of resources) {
+                    work[res] += allocation[p.id][res];
+                }
+                
+                safeSequence.push(p.id);
+                finished.add(p.id);
+                found = true;
+                break;
+            }
+        }
+    }
+    
+    return safeSequence.length === waitingCars.length ? safeSequence : null;
 }
 
 function moveCar(carObj, position) {
@@ -188,7 +417,105 @@ function moveCar(carObj, position) {
         log(`${carObj.id} ALLOCATED: ${carObj.allocated}, REQUESTING: ${carObj.requesting}`, 'warning');
         
         updateDeadlockConditions();
+        updateResourceStatus();
+    } else if (position === 'intersection') {
+        carObj.state = 'running';
+        log(`${carObj.id} crossing intersection`, 'info');
     }
+    
+    drawRAG();
+}
+
+function advanceAllCars() {
+    log('=== Attempting to advance all waiting cars ===', 'info');
+    
+    const waitingCars = cars.filter(c => c.state === 'waiting');
+    
+    if (waitingCars.length === 0) {
+        log('No cars waiting to advance', 'info');
+        return;
+    }
+    
+    let advanced = false;
+    
+    for (const car of waitingCars) {
+        if (tryAdvanceCar(car)) {
+            advanced = true;
+        }
+    }
+    
+    if (!advanced) {
+        log('No cars can advance - all waiting for allocated resources', 'warning');
+        log('This may indicate deadlock. Run detection to verify.', 'warning');
+    }
+    
+    updateResourceStatus();
+}
+
+function tryAdvanceCar(carObj) {
+    if (carObj.state !== 'waiting') return false;
+    
+    // Check if requested resource is available
+    const resourceOwner = cars.find(c => 
+        c.allocated === carObj.requesting && c.id !== carObj.id
+    );
+    
+    if (!resourceOwner) {
+        // Resource available! Grant it
+        log(`${carObj.id} granted ${carObj.requesting}`, 'success');
+        
+        const oldResource = carObj.allocated;
+        carObj.allocated = carObj.requesting;
+        carObj.requesting = null;
+        
+        // Move through intersection
+        moveCar(carObj, 'intersection');
+        
+        // Complete and exit after crossing
+        setTimeout(() => {
+            completeCar(carObj);
+        }, 1500);
+        
+        return true;
+    }
+    
+    return false;
+}
+
+function completeCar(carObj) {
+    log(`${carObj.id} completed journey - Releasing all resources`, 'success');
+    
+    carObj.element.style.transition = 'all 0.8s ease';
+    const intersection = document.getElementById('intersection');
+    const containerWidth = intersection.offsetWidth;
+    const exitPos = positions[carObj.direction].exit;
+    
+    carObj.element.style.left = (exitPos.left / 100 * containerWidth) + 'px';
+    carObj.element.style.top = (exitPos.top / 100 * containerWidth) + 'px';
+    
+    setTimeout(() => {
+        carObj.element.remove();
+        cars = cars.filter(c => c.id !== carObj.id);
+        completedProcesses++;
+        
+        updateStats();
+        updateResourceStatus();
+        drawRAG();
+        
+        // Check if deadlock is resolved
+        const stillDeadlocked = checkCircularWait();
+        if (!stillDeadlocked && isDeadlockDetected) {
+            isDeadlockDetected = false;
+            log('✓ Deadlock resolved!', 'success');
+            cars.forEach(c => c.element.classList.remove('deadlocked'));
+        }
+        
+        updateDeadlockConditions();
+        
+        // Try to advance other waiting cars
+        const waitingCars = cars.filter(c => c.state === 'waiting');
+        waitingCars.forEach(tryAdvanceCar);
+    }, 800);
 }
 
 function updateDeadlockConditions() {
@@ -283,8 +610,7 @@ function detectDeadlock() {
         return false;
     }
 
-    log('=== DEADLOCK DETECTION ALGORITHM ===', 'info');
-    log('Using RAG Cycle Detection Method', 'info');
+    log('=== DEADLOCK DETECTION (RAG Cycle Detection) ===', 'info');
 
     const hasCircular = checkCircularWait();
 
@@ -295,12 +621,12 @@ function detectDeadlock() {
             updateStats();
         }
         
-        log('DEADLOCK DETECTED!', 'error');
+        log('🔴 DEADLOCK DETECTED!', 'error');
         log('All 4 Coffman Conditions Satisfied:', 'error');
-        log('  1. Mutual Exclusion: YES - Resources are exclusive', 'error');
-        log('  2. Hold & Wait: YES - Processes hold while requesting', 'error');
-        log('  3. No Preemption: YES - Cannot forcefully take resources', 'error');
-        log('  4. Circular Wait: YES - Cycle detected in RAG', 'error');
+        log('  1. Mutual Exclusion: ✓ Resources are single-instance', 'error');
+        log('  2. Hold & Wait: ✓ Processes hold while requesting', 'error');
+        log('  3. No Preemption: ✓ Cannot forcefully take resources', 'error');
+        log('  4. Circular Wait: ✓ Cycle detected in RAG', 'error');
         
         const cycle = findCycle();
         if (cycle.length > 0) {
@@ -314,7 +640,7 @@ function detectDeadlock() {
         drawRAG();
         return true;
     } else {
-        log('No deadlock detected - No cycle in RAG', 'success');
+        log('✓ No deadlock detected - No cycle in RAG', 'success');
         drawRAG();
         return false;
     }
@@ -362,7 +688,8 @@ function findCycle() {
 }
 
 async function runBankersAlgorithm() {
-    log('=== BANKER\'S ALGORITHM ===', 'success');
+    log('=== BANKER\'S ALGORITHM (Deadlock Avoidance) ===', 'success');
+    log('Note: This analyzes the CURRENT state for safety', 'info');
     
     const processes = cars.filter(c => c.state === 'waiting');
     if (processes.length === 0) {
@@ -379,16 +706,11 @@ async function runBankersAlgorithm() {
 
     processes.forEach(p => {
         allocation[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
-        max[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
+        max[p.id] = { ...p.maxDemand }; // Use predefined max demand
         need[p.id] = { R_North: 0, R_South: 0, R_East: 0, R_West: 0 };
 
         if (p.allocated) {
             allocation[p.id][p.allocated] = 1;
-            max[p.id][p.allocated] = 1;
-        }
-        
-        if (p.requesting) {
-            max[p.id][p.requesting] = 1;
         }
 
         resources.forEach(r => {
@@ -403,7 +725,7 @@ async function runBankersAlgorithm() {
         });
     });
 
-    displayBankerMatrices(processes, allocation, need, available, totalResources);
+    displayBankerMatrices(processes, allocation, max, need, available, totalResources);
 
     log('Total Resources: ' + JSON.stringify(totalResources), 'info');
     log('Available Resources: ' + JSON.stringify(available), 'info');
@@ -447,77 +769,73 @@ async function runBankersAlgorithm() {
                 break;
             }
         }
-
-        if (!found && finished.size < processes.length) {
-            log(`Cannot find process to execute - Work: ${JSON.stringify(work)}`, 'warning');
-            for (const p of processes) {
-                if (!finished.has(p.id)) {
-                    log(`${p.id} blocked - Needs: ${JSON.stringify(need[p.id])}`, 'warning');
-                }
-            }
-        }
     }
 
     if (safeSequence.length === processes.length) {
-        log(`✓ SAFE SEQUENCE FOUND: ${safeSequence.join(' → ')}`, 'success');
-        log('System is in SAFE STATE - No deadlock will occur', 'success');
-        log('Executing safe sequence and releasing resources...', 'info');
+        log(`✓ SAFE STATE: Sequence found: ${safeSequence.join(' → ')}`, 'success');
+        log('In avoidance mode, this allocation would be ALLOWED', 'success');
         
-        for (const pid of safeSequence) {
-            await sleep(1000);
-            const car = cars.find(c => c.id === pid);
-            if (car) {
-                car.element.classList.remove('deadlocked');
-                car.element.remove();
-                cars = cars.filter(c => c.id !== pid);
-                log(`${pid} completed execution and released resources`, 'success');
-                updateStats();
-                
-                const stillDeadlocked = checkCircularWait();
-                if (!stillDeadlocked) {
-                    isDeadlockDetected = false;
+        const execute = confirm('Execute this safe sequence? (Will complete processes in order)');
+        if (execute) {
+            log('Executing safe sequence...', 'info');
+            for (const pid of safeSequence) {
+                await sleep(1500);
+                const car = cars.find(c => c.id === pid);
+                if (car) {
+                    completeCar(car);
+                    await sleep(500);
                 }
-                drawRAG();
             }
+            log('✓ All processes completed safely!', 'success');
         }
-        
-        log('✓ All processes completed safely!', 'success');
-        isDeadlockDetected = false;
-        updateDeadlockConditions();
     } else {
-        log('✗ NO SAFE SEQUENCE EXISTS', 'error');
-        log('System is in UNSAFE STATE - Potential deadlock!', 'error');
+        log('✗ UNSAFE STATE: No safe sequence exists', 'error');
+        log('System is in an UNSAFE state - Deadlock possible!', 'error');
         log(`Only ${safeSequence.length} of ${processes.length} processes can complete`, 'error');
         if (safeSequence.length > 0) {
             log(`Partial sequence: ${safeSequence.join(' → ')}`, 'warning');
         }
-        log('Banker\'s Algorithm would PREVENT this allocation', 'error');
+        log('In avoidance mode, this allocation would have been PREVENTED', 'error');
     }
 }
 
-function displayBankerMatrices(processes, allocation, need, available, total) {
+function displayBankerMatrices(processes, allocation, max, need, available, total) {
     const resources = ['R_N', 'R_S', 'R_E', 'R_W'];
+    const fullResources = ['R_North', 'R_South', 'R_East', 'R_West'];
     
-    let html = '<strong>ALLOCATION MATRIX:</strong><table class="matrix-table"><tr><th>Process</th>';
+    let html = '<strong>MAX MATRIX (Declared Requirements):</strong><table class="matrix-table"><tr><th>Process</th>';
     resources.forEach(r => html += `<th>${r}</th>`);
     html += '</tr>';
     
     processes.forEach(p => {
         html += `<tr><td><strong>${p.id}</strong></td>`;
-        ['R_North', 'R_South', 'R_East', 'R_West'].forEach(r => {
+        fullResources.forEach(r => {
+            html += `<td>${max[p.id][r]}</td>`;
+        });
+        html += '</tr>';
+    });
+    html += '</table>';
+
+    html += '<br><strong>ALLOCATION MATRIX (Currently Held):</strong><table class="matrix-table"><tr><th>Process</th>';
+    resources.forEach(r => html += `<th>${r}</th>`);
+    html += '</tr>';
+    
+    processes.forEach(p => {
+        html += `<tr><td><strong>${p.id}</strong></td>`;
+        fullResources.forEach(r => {
             html += `<td>${allocation[p.id][r]}</td>`;
         });
         html += '</tr>';
     });
     html += '</table>';
 
-    html += '<br><strong>NEED MATRIX:</strong><table class="matrix-table"><tr><th>Process</th>';
+    html += '<br><strong>NEED MATRIX (Still Required):</strong><table class="matrix-table"><tr><th>Process</th>';
     resources.forEach(r => html += `<th>${r}</th>`);
     html += '</tr>';
     
     processes.forEach(p => {
         html += `<tr><td><strong>${p.id}</strong></td>`;
-        ['R_North', 'R_South', 'R_East', 'R_West'].forEach(r => {
+        fullResources.forEach(r => {
             html += `<td>${need[p.id][r]}</td>`;
         });
         html += '</tr>';
@@ -527,7 +845,7 @@ function displayBankerMatrices(processes, allocation, need, available, total) {
     html += '<br><strong>AVAILABLE VECTOR:</strong><table class="matrix-table"><tr>';
     resources.forEach(r => html += `<th>${r}</th>`);
     html += '</tr><tr>';
-    ['R_North', 'R_South', 'R_East', 'R_West'].forEach(r => {
+    fullResources.forEach(r => {
         html += `<td><strong>${available[r]}</strong></td>`;
     });
     html += '</tr></table>';
@@ -599,7 +917,7 @@ function drawRAG(showDeadlock = null) {
         };
     });
 
-    // Draw edges - Allocated (solid) - ALWAYS GREEN
+    // Draw edges - Allocated (solid) - GREEN
     ctx.lineWidth = isMobile ? 1.5 : 2;
     waitingCars.forEach(car => {
         if (car.allocated && resourcePos[car.allocated] && processPos[car.id]) {
@@ -616,7 +934,7 @@ function drawRAG(showDeadlock = null) {
         }
     });
 
-    // Draw edges - Requesting (dashed) - ALWAYS RED
+    // Draw edges - Requesting (dashed) - RED
     waitingCars.forEach(car => {
         if (car.requesting && resourcePos[car.requesting] && processPos[car.id]) {
             const pPos = processPos[car.id];
@@ -715,12 +1033,16 @@ function resetSimulation() {
     cars.forEach(car => car.element.remove());
     cars = [];
     carIdCounter = 1;
+    completedProcesses = 0;
+    deniedRequests = 0;
     isDeadlockDetected = false;
     setAllConditions(false);
     updateStats();
+    updateResourceStatus();
     drawRAG();
     document.getElementById('bankerDisplay').innerHTML = '<em>Run Banker\'s Algorithm to see allocation matrices...</em>';
     log('Simulation reset - All resources freed', 'info');
+    log(`Mode: ${simulationMode.toUpperCase()}`, 'info');
 }
 
 function setAllConditions(active) {
